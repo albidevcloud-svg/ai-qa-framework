@@ -1,6 +1,7 @@
 package com.aiqa.ai;
 
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
@@ -34,7 +35,7 @@ public class AiClient {
 
         JsonObject body = new JsonObject();
         body.addProperty("model", MODEL);
-        body.addProperty("max_tokens", 2000);
+        body.addProperty("max_tokens", 4000);
         body.add("messages", messages);
 
         HttpRequest request = HttpRequest.newBuilder(URI.create(URL))
@@ -54,9 +55,25 @@ public class AiClient {
             }
 
             JsonObject json = JsonParser.parseString(response.body()).getAsJsonObject();
-            return json.getAsJsonArray("content")
-                    .get(0).getAsJsonObject()
-                    .get("text").getAsString();
+            StringBuilder text = new StringBuilder();
+
+            for (JsonElement block : json.getAsJsonArray("content")) {
+                JsonObject obj = block.getAsJsonObject();
+                if (obj.has("type") && "text".equals(obj.get("type").getAsString())
+                        && obj.has("text")) {
+                    text.append(obj.get("text").getAsString());
+                }
+            }
+
+            if (text.length() == 0) {
+                String reason = json.has("stop_reason") && !json.get("stop_reason").isJsonNull()
+                        ? json.get("stop_reason").getAsString() : "unknown";
+                throw new RuntimeException("AI returned no text. stop_reason=" + reason);
+            }
+
+            return text.toString();
+        } catch (RuntimeException e) {
+            throw e;
         } catch (Exception e) {
             throw new RuntimeException("AI call failed: " + e.getMessage(), e);
         }
